@@ -9,7 +9,6 @@ import importlib.util
 import importlib.metadata
 import platform
 import json
-import shlex
 from functools import lru_cache
 
 from modules import cmd_args, errors
@@ -77,7 +76,7 @@ def git_tag():
     except Exception:
         try:
 
-            changelog_md = os.path.join(script_path, "CHANGELOG.md")
+            changelog_md = os.path.join(os.path.dirname(os.path.dirname(__file__)), "CHANGELOG.md")
             with open(changelog_md, "r", encoding="utf-8") as file:
                 line = next((line.strip() for line in file if line.strip()), "<none>")
                 line = line.replace("## ", "")
@@ -232,7 +231,7 @@ def run_extension_installer(extension_dir):
 
     try:
         env = os.environ.copy()
-        env['PYTHONPATH'] = f"{script_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
+        env['PYTHONPATH'] = f"{os.path.abspath('.')}{os.pathsep}{env.get('PYTHONPATH', '')}"
 
         stdout = run(f'"{python}" "{path_installer}"', errdesc=f"Error running install.py for extension {extension_dir}", custom_env=env).strip()
         if stdout:
@@ -280,73 +279,85 @@ def run_extensions_installers(settings_file):
 re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
 
 
-def requirements_met(requirements_file: str) -> bool:
-    re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
+def requirements_met(requirements_file):
+    """
+    Does a simple parse of a requirements.txt file to determine if all rerqirements in it
+    are already installed. Returns True if so, False if not installed or parsing fails.
+    """
 
     import importlib.metadata
     import packaging.version
 
-    try:
-        with open(requirements_file, "r", encoding="utf8") as file:
-            for line in file:
-                if line.strip() == "":
-                    continue
+    with open(requirements_file, "r", encoding="utf8") as file:
+        for line in file:
+            if line.strip() == "":
+                continue
 
-                m = re.match(re_requirement, line)
-                if m is None:
-                    return False
+            m = re.match(re_requirement, line)
+            if m is None:
+                return False
 
-                package = m.group(1).strip()
-                version_required = (m.group(2) or "").strip()
+            package = m.group(1).strip()
+            version_required = (m.group(2) or "").strip()
 
-                if version_required == "":
-                    continue
+            if version_required == "":
+                continue
 
-                try:
-                    version_installed = importlib.metadata.version(package)
-                except Exception:
-                    return False
+            try:
+                version_installed = importlib.metadata.version(package)
+            except Exception:
+                return False
 
-                if packaging.version.parse(version_required) != packaging.version.parse(version_installed):
-                    return False
+            if packaging.version.parse(version_required) != packaging.version.parse(version_installed):
+                return False
 
-        return True
-    except Exception as e:
-        print(f"Error checking requirements: {e}")
-        return False
+    return True
 
 
 def prepare_environment():
     torch_index_url = os.environ.get('TORCH_INDEX_URL', "https://download.pytorch.org/whl/cu121")
     torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.1.2 torchvision==0.16.2 --extra-index-url {torch_index_url}")
-    
     if args.use_ipex:
         if platform.system() == "Windows":
+            # The "Nuullll/intel-extension-for-pytorch" wheels were built from IPEX source for Intel Arc GPU: https://github.com/intel/intel-extension-for-pytorch/tree/xpu-main
+            # This is NOT an Intel official release so please use it at your own risk!!
+            # See https://github.com/Nuullll/intel-extension-for-pytorch/releases/tag/v2.0.110%2Bxpu-master%2Bdll-bundle for details.
+            #
+            # Strengths (over official IPEX 2.0.110 windows release):
+            #   - AOT build (for Arc GPU only) to eliminate JIT compilation overhead: https://github.com/intel/intel-extension-for-pytorch/issues/399
+            #   - Bundles minimal oneAPI 2023.2 dependencies into the python wheels, so users don't need to install oneAPI for the whole system.
+            #   - Provides a compatible torchvision wheel: https://github.com/intel/intel-extension-for-pytorch/issues/465
+            # Limitation:
+            #   - Only works for python 3.10
             url_prefix = "https://github.com/Nuullll/intel-extension-for-pytorch/releases/download/v2.0.110%2Bxpu-master%2Bdll-bundle"
             torch_command = os.environ.get('TORCH_COMMAND', f"pip install {url_prefix}/torch-2.0.0a0+gite9ebda2-cp310-cp310-win_amd64.whl {url_prefix}/torchvision-0.15.2a0+fa99a53-cp310-cp310-win_amd64.whl {url_prefix}/intel_extension_for_pytorch-2.0.110+gitc6ea20b-cp310-cp310-win_amd64.whl")
         else:
+            # Using official IPEX release for linux since it's already an AOT build.
+            # However, users still have to install oneAPI toolkit and activate oneAPI environment manually.
+            # See https://intel.github.io/intel-extension-for-pytorch/index.html#installation for details.
             torch_index_url = os.environ.get('TORCH_INDEX_URL', "https://pytorch-extension.intel.com/release-whl/stable/xpu/us/")
             torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.0.0a0 intel-extension-for-pytorch==2.0.110+gitba7f6c1 --extra-index-url {torch_index_url}")
-
     requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
     requirements_file_for_npu = os.environ.get('REQS_FILE_FOR_NPU', "requirements_npu.txt")
+
     xformers_package = os.environ.get('XFORMERS_PACKAGE', 'xformers==0.0.23.post1')
     clip_package = os.environ.get('CLIP_PACKAGE', "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip")
     openclip_package = os.environ.get('OPENCLIP_PACKAGE', "https://github.com/mlfoundations/open_clip/archive/bb6e834e9c70d9c27d0dc3ecedeebeaeb1ffad6b.zip")
 
     assets_repo = os.environ.get('ASSETS_REPO', "https://github.com/AUTOMATIC1111/stable-diffusion-webui-assets.git")
-    stable_diffusion_repo = os.environ.get('STABLE_DIFFUSION_REPO', "https://github.com/HDRJ-One/stablediffusion.git")
+    stable_diffusion_repo = os.environ.get('STABLE_DIFFUSION_REPO', "https://github.com/Stability-AI/stablediffusion.git")
     stable_diffusion_xl_repo = os.environ.get('STABLE_DIFFUSION_XL_REPO', "https://github.com/Stability-AI/generative-models.git")
     k_diffusion_repo = os.environ.get('K_DIFFUSION_REPO', 'https://github.com/crowsonkb/k-diffusion.git')
     blip_repo = os.environ.get('BLIP_REPO', 'https://github.com/salesforce/BLIP.git')
 
     assets_commit_hash = os.environ.get('ASSETS_COMMIT_HASH', "6f7db241d2f8ba7457bac5ca9753331f0c266917")
-    stable_diffusion_commit_hash = os.environ.get('STABLE_DIFFUSION_COMMIT_HASH', "17171ea29d0d91ba1e62cc72878ddfd3a94b0cfc")
+    stable_diffusion_commit_hash = os.environ.get('STABLE_DIFFUSION_COMMIT_HASH', "cf1d67a6fd5ea1aa600c4df58e5b47da45f6bdbf")
     stable_diffusion_xl_commit_hash = os.environ.get('STABLE_DIFFUSION_XL_COMMIT_HASH', "45c443b316737a4ab6e40413d7794a7f5657c19f")
     k_diffusion_commit_hash = os.environ.get('K_DIFFUSION_COMMIT_HASH', "ab527a9a6d347f364e3d185ba6d714e22d80cb3c")
     blip_commit_hash = os.environ.get('BLIP_COMMIT_HASH', "48211a1594f1321b00f14c9f7a5b4813144b2fb9")
 
     try:
+        # the existence of this file is a signal to webui.sh/bat that webui needs to be restarted when it stops execution
         os.remove(os.path.join(script_path, "tmp", "restart"))
         os.environ.setdefault('SD_WEBUI_RESTARTING', '1')
     except OSError:
@@ -365,11 +376,8 @@ def prepare_environment():
     print(f"Version: {tag}")
     print(f"Commit hash: {commit}")
 
-    # Additional setup for environment and requirements
-    # Implement any further updates here
-
     if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
-        run(f'"{python}" -m {torch_command}', shell=True, check=True)
+        run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
         startup_timer.record("install torch")
 
     if args.use_ipex:
@@ -389,28 +397,54 @@ def prepare_environment():
         run_pip(f"install {openclip_package}", "open_clip")
         startup_timer.record("install open_clip")
 
-    run_extensions_installers(settings_file)
-    startup_timer.record("install extensions")
+    if (not is_installed("xformers") or args.reinstall_xformers) and args.xformers:
+        run_pip(f"install -U -I --no-deps {xformers_package}", "xformers")
+        startup_timer.record("install xformers")
+
+    if not is_installed("ngrok") and args.ngrok:
+        run_pip("install ngrok", "ngrok")
+        startup_timer.record("install ngrok")
+
+    os.makedirs(os.path.join(script_path, dir_repos), exist_ok=True)
+
+    git_clone(assets_repo, repo_dir('stable-diffusion-webui-assets'), "assets", assets_commit_hash)
+    git_clone(stable_diffusion_repo, repo_dir('stable-diffusion-stability-ai'), "Stable Diffusion", stable_diffusion_commit_hash)
+    git_clone(stable_diffusion_xl_repo, repo_dir('generative-models'), "Stable Diffusion XL", stable_diffusion_xl_commit_hash)
+    git_clone(k_diffusion_repo, repo_dir('k-diffusion'), "K-diffusion", k_diffusion_commit_hash)
+    git_clone(blip_repo, repo_dir('BLIP'), "BLIP", blip_commit_hash)
+
+    startup_timer.record("clone repositores")
+
+    if not os.path.isfile(requirements_file):
+        requirements_file = os.path.join(script_path, requirements_file)
 
     if not requirements_met(requirements_file):
-        print(f"Some requirements in {requirements_file} are not met.")
-    else:
-        print(f"All requirements in {requirements_file} are met.")
-    if not requirements_met(requirements_file_for_npu):
-        print(f"Some requirements in {requirements_file_for_npu} are not met.")
-    else:
-        print(f"All requirements in {requirements_file_for_npu} are met.")
+        run_pip(f"install -r \"{requirements_file}\"", "requirements")
+        startup_timer.record("install requirements")
 
-    startup_timer.record("check requirements")
+    if not os.path.isfile(requirements_file_for_npu):
+        requirements_file_for_npu = os.path.join(script_path, requirements_file_for_npu)
 
-    if args.repo and args.commit:
-        repo_url = os.environ.get('REPO_URL', "https://github.com/AUTOMATIC1111/stable-diffusion-webui")
-        commit_sha = os.environ.get('COMMIT_SHA', args.commit)
-        run(f"git clone {repo_url} --branch master --single-branch {repo_dir}")
-        run(f"cd {repo_dir} && git checkout {commit_sha}")
-        startup_timer.record("clone repo")
+    if "torch_npu" in torch_command and not requirements_met(requirements_file_for_npu):
+        run_pip(f"install -r \"{requirements_file_for_npu}\"", "requirements_for_npu")
+        startup_timer.record("install requirements_for_npu")
 
-    print("Setup complete.")
+    if not args.skip_install:
+        run_extensions_installers(settings_file=args.ui_settings_file)
+
+    if args.update_check:
+        version_check(commit)
+        startup_timer.record("check version")
+
+    if args.update_all_extensions:
+        git_pull_recursive(extensions_dir)
+        startup_timer.record("update extensions")
+
+    if "--exit" in sys.argv:
+        print("Exiting because of --exit argument")
+        exit(0)
+
+
 
 def configure_for_tests():
     if "--api" not in sys.argv:
@@ -427,7 +461,7 @@ def configure_for_tests():
 
 
 def start():
-    print(f"Launching {'API server' if '--nowebui' in sys.argv else 'Web UI'} with arguments: {shlex.join(sys.argv[1:])}")
+    print(f"Launching {'API server' if '--nowebui' in sys.argv else 'Web UI'} with arguments: {' '.join(sys.argv[1:])}")
     import webui
     if '--nowebui' in sys.argv:
         webui.api_only()
