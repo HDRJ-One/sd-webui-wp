@@ -217,6 +217,95 @@ def version_check(commit):
     except Exception as e:
         print("version check failed", e)
 
+def run_extension_installer(extension_dir):
+    path_installer = os.path.join(extension_dir, "install.py")
+    if not os.path.isfile(path_installer):
+        return
+
+    try:
+        env = os.environ.copy()
+        env['PYTHONPATH'] = f"{script_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
+
+        stdout = run(f'"{python}" "{path_installer}"', errdesc=f"Error running install.py for extension {extension_dir}", custom_env=env).strip()
+        if stdout:
+            print(stdout)
+    except Exception as e:
+        errors.report(str(e))
+
+
+def list_extensions(settings_file):
+    settings = {}
+
+    try:
+        with open(settings_file, "r", encoding="utf8") as file:
+            settings = json.load(file)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        errors.report(f'\nCould not load settings\nThe config file "{settings_file}" is likely corrupted\nIt has been moved to the "tmp/config.json"\nReverting config to default\n\n''', exc_info=True)
+        os.replace(settings_file, os.path.join(script_path, "tmp", "config.json"))
+
+    disabled_extensions = set(settings.get('disabled_extensions', []))
+    disable_all_extensions = settings.get('disable_all_extensions', 'none')
+
+    if disable_all_extensions != 'none' or args.disable_extra_extensions or args.disable_all_extensions or not os.path.isdir(extensions_dir):
+        return []
+
+    return [x for x in os.listdir(extensions_dir) if x not in disabled_extensions]
+
+
+def run_extensions_installers(settings_file):
+    if not os.path.isdir(extensions_dir):
+        return
+
+    with startup_timer.subcategory("run extensions installers"):
+        for dirname_extension in list_extensions(settings_file):
+            logging.debug(f"Installing {dirname_extension}")
+
+            path = os.path.join(extensions_dir, dirname_extension)
+
+            if os.path.isdir(path):
+                run_extension_installer(path)
+                startup_timer.record(dirname_extension)
+
+
+re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
+
+
+def requirements_met(requirements_file):
+    """
+    Does a simple parse of a requirements.txt file to determine if all rerqirements in it
+    are already installed. Returns True if so, False if not installed or parsing fails.
+    """
+
+    import importlib.metadata
+    import packaging.version
+
+    with open(requirements_file, "r", encoding="utf8") as file:
+        for line in file:
+            if line.strip() == "":
+                continue
+
+            m = re.match(re_requirement, line)
+            if m is None:
+                return False
+
+            package = m.group(1).strip()
+            version_required = (m.group(2) or "").strip()
+
+            if version_required == "":
+                continue
+
+            try:
+                version_installed = importlib.metadata.version(package)
+            except Exception:
+                return False
+
+            if packaging.version.parse(version_required) != packaging.version.parse(version_installed):
+                return False
+
+    return True
+
 
 def prepare_environment():
     """Prepare the environment for launching the web UI."""
