@@ -171,14 +171,7 @@ def download_file(url, local_filename):
 
 def prepare_environment():
     torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113")
-    
-    # Fetch the requirements file URL from the environment or use the default URL
     requirements_file = os.environ.get('REQS_FILE', "https://raw.githubusercontent.com/HDRJ-One/sd-webui-hd/main/requirements_versions.txt")
-    
-    # If requirements_file is a URL, download it
-    if requirements_file.startswith('http'):
-        download_file(requirements_file, "requirements_versions.txt")
-        requirements_file = "requirements_versions.txt"  # Now pointing to the local file
 
     commandline_args = os.environ.get('COMMANDLINE_ARGS', "")
 
@@ -222,6 +215,10 @@ def prepare_environment():
     print(f"Python {sys.version}")
     print(f"Commit hash: {commit}")
     
+    # Install requests if not installed
+    if not is_installed("requests"):
+        run_pip("install requests", "requests")
+
     if not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch")
 
@@ -277,6 +274,7 @@ def prepare_environment():
     if run_tests:
         exitcode = tests(test_dir)
         exit(exitcode)
+
 
 
 def tests(test_dir):
