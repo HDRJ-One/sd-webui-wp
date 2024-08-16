@@ -208,11 +208,11 @@ def git_pull_recursive(dir):
                 print(f"Couldn't perform 'git pull' on repository in '{subdir}':\n{e.output.decode('utf-8').strip()}\n")
 
 
-def version_check(commit: Optional[str]):
+def version_check(commit):
     try:
         import requests
         commits = requests.get('https://api.github.com/repos/AUTOMATIC1111/stable-diffusion-webui/branches/master').json()
-        if commit and commits['commit']['sha'] != commit:
+        if commit != "<none>" and commits['commit']['sha'] != commit:
             print("--------------------------------------------------------")
             print("| You are not up to date with the most recent release. |")
             print("| Consider running `git pull` to update.               |")
@@ -222,10 +222,10 @@ def version_check(commit: Optional[str]):
         else:
             print("Not a git clone, can't perform version check.")
     except Exception as e:
-        print("Version check failed:", e)
+        print("version check failed", e)
 
 
-def run_extension_installer(extension_dir: str):
+def run_extension_installer(extension_dir):
     path_installer = os.path.join(extension_dir, "install.py")
     if not os.path.isfile(path_installer):
         return
@@ -233,14 +233,15 @@ def run_extension_installer(extension_dir: str):
     try:
         env = os.environ.copy()
         env['PYTHONPATH'] = f"{script_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
-        stdout = run(f'"{python}" "{path_installer}"', shell=True, env=env, capture_output=True, text=True).stdout.strip()
+
+        stdout = run(f'"{python}" "{path_installer}"', errdesc=f"Error running install.py for extension {extension_dir}", custom_env=env).strip()
         if stdout:
             print(stdout)
     except Exception as e:
-        print("Error running install.py for extension", extension_dir, ":", e)
+        errors.report(str(e))
 
 
-def list_extensions(settings_file: str):
+def list_extensions(settings_file):
     settings = {}
 
     try:
@@ -248,9 +249,8 @@ def list_extensions(settings_file: str):
             settings = json.load(file)
     except FileNotFoundError:
         pass
-    except Exception as e:
-        print(f'Could not load settings. The config file "{settings_file}" is likely corrupted.')
-        print(f'Error: {e}')
+    except Exception:
+        errors.report(f'\nCould not load settings\nThe config file "{settings_file}" is likely corrupted\nIt has been moved to the "tmp/config.json"\nReverting config to default\n\n''', exc_info=True)
         os.replace(settings_file, os.path.join(script_path, "tmp", "config.json"))
 
     disabled_extensions = set(settings.get('disabled_extensions', []))
@@ -262,16 +262,22 @@ def list_extensions(settings_file: str):
     return [x for x in os.listdir(extensions_dir) if x not in disabled_extensions]
 
 
-def run_extensions_installers(settings_file: str):
+def run_extensions_installers(settings_file):
     if not os.path.isdir(extensions_dir):
         return
 
-    for dirname_extension in list_extensions(settings_file):
-        logging.debug(f"Installing {dirname_extension}")
-        path = os.path.join(extensions_dir, dirname_extension)
+    with startup_timer.subcategory("run extensions installers"):
+        for dirname_extension in list_extensions(settings_file):
+            logging.debug(f"Installing {dirname_extension}")
 
-        if os.path.isdir(path):
-            run_extension_installer(path)
+            path = os.path.join(extensions_dir, dirname_extension)
+
+            if os.path.isdir(path):
+                run_extension_installer(path)
+                startup_timer.record(dirname_extension)
+
+
+re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
 
 
 def requirements_met(requirements_file: str) -> bool:
