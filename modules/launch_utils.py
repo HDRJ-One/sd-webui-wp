@@ -1,3 +1,4 @@
+# this scripts installs necessary requirements and launches main program in webui.py
 import logging
 import re
 import subprocess
@@ -8,6 +9,7 @@ import importlib.util
 import importlib.metadata
 import platform
 import json
+import shlex
 from functools import lru_cache
 
 from modules import cmd_args, errors
@@ -28,6 +30,7 @@ default_command_live = (os.environ.get('WEBUI_LAUNCH_LIVE_OUTPUT') == "1")
 
 os.environ.setdefault('GRADIO_ANALYTICS_ENABLED', 'False')
 
+
 def check_python_version():
     is_windows = platform.system() == "Windows"
     major = sys.version_info.major
@@ -41,6 +44,7 @@ def check_python_version():
 
     if not (major == 3 and minor in supported_minors):
         import modules.errors
+
         modules.errors.print_error_explanation(f"""
 INCOMPATIBLE PYTHON VERSION
 
@@ -72,6 +76,7 @@ def git_tag():
         return subprocess.check_output([git, "-C", script_path, "describe", "--tags"], shell=False, encoding='utf8').strip()
     except Exception:
         try:
+
             changelog_md = os.path.join(script_path, "CHANGELOG.md")
             with open(changelog_md, "r", encoding="utf-8") as file:
                 line = next((line.strip() for line in file if line.strip()), "<none>")
@@ -164,6 +169,8 @@ def run_git(dir, name, command, desc=None, errdesc=None, custom_env=None, live: 
 
 
 def git_clone(url, dir, name, commithash=None):
+    # TODO clone into temporary dir and move if successful
+
     if os.path.exists(dir):
         if commithash is None:
             return
@@ -216,6 +223,7 @@ def version_check(commit):
             print("Not a git clone, can't perform version check.")
     except Exception as e:
         print("version check failed", e)
+
 
 def run_extension_installer(extension_dir):
     path_installer = os.path.join(extension_dir, "install.py")
@@ -310,47 +318,34 @@ def requirements_met(requirements_file):
 def prepare_environment():
     torch_index_url = os.environ.get('TORCH_INDEX_URL', "https://download.pytorch.org/whl/cu121")
     torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.1.2 torchvision==0.16.2 --extra-index-url {torch_index_url}")
+    
     if args.use_ipex:
         if platform.system() == "Windows":
-            # The "Nuullll/intel-extension-for-pytorch" wheels were built from IPEX source for Intel Arc GPU: https://github.com/intel/intel-extension-for-pytorch/tree/xpu-main
-            # This is NOT an Intel official release so please use it at your own risk!!
-            # See https://github.com/Nuullll/intel-extension-for-pytorch/releases/tag/v2.0.110%2Bxpu-master%2Bdll-bundle for details.
-            #
-            # Strengths (over official IPEX 2.0.110 windows release):
-            #   - AOT build (for Arc GPU only) to eliminate JIT compilation overhead: https://github.com/intel/intel-extension-for-pytorch/issues/399
-            #   - Bundles minimal oneAPI 2023.2 dependencies into the python wheels, so users don't need to install oneAPI for the whole system.
-            #   - Provides a compatible torchvision wheel: https://github.com/intel/intel-extension-for-pytorch/issues/465
-            # Limitation:
-            #   - Only works for python 3.10
             url_prefix = "https://github.com/Nuullll/intel-extension-for-pytorch/releases/download/v2.0.110%2Bxpu-master%2Bdll-bundle"
             torch_command = os.environ.get('TORCH_COMMAND', f"pip install {url_prefix}/torch-2.0.0a0+gite9ebda2-cp310-cp310-win_amd64.whl {url_prefix}/torchvision-0.15.2a0+fa99a53-cp310-cp310-win_amd64.whl {url_prefix}/intel_extension_for_pytorch-2.0.110+gitc6ea20b-cp310-cp310-win_amd64.whl")
         else:
-            # Using official IPEX release for linux since it's already an AOT build.
-            # However, users still have to install oneAPI toolkit and activate oneAPI environment manually.
-            # See https://intel.github.io/intel-extension-for-pytorch/index.html#installation for details.
             torch_index_url = os.environ.get('TORCH_INDEX_URL', "https://pytorch-extension.intel.com/release-whl/stable/xpu/us/")
             torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.0.0a0 intel-extension-for-pytorch==2.0.110+gitba7f6c1 --extra-index-url {torch_index_url}")
+
     requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
     requirements_file_for_npu = os.environ.get('REQS_FILE_FOR_NPU', "requirements_npu.txt")
-
     xformers_package = os.environ.get('XFORMERS_PACKAGE', 'xformers==0.0.23.post1')
     clip_package = os.environ.get('CLIP_PACKAGE', "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip")
     openclip_package = os.environ.get('OPENCLIP_PACKAGE', "https://github.com/mlfoundations/open_clip/archive/bb6e834e9c70d9c27d0dc3ecedeebeaeb1ffad6b.zip")
 
     assets_repo = os.environ.get('ASSETS_REPO', "https://github.com/AUTOMATIC1111/stable-diffusion-webui-assets.git")
-    stable_diffusion_repo = os.environ.get('STABLE_DIFFUSION_REPO', "https://github.com/Stability-AI/stablediffusion.git")
+    stable_diffusion_repo = os.environ.get('STABLE_DIFFUSION_REPO', "https://github.com/HDRJ-One/stablediffusion.git")
     stable_diffusion_xl_repo = os.environ.get('STABLE_DIFFUSION_XL_REPO', "https://github.com/Stability-AI/generative-models.git")
     k_diffusion_repo = os.environ.get('K_DIFFUSION_REPO', 'https://github.com/crowsonkb/k-diffusion.git')
     blip_repo = os.environ.get('BLIP_REPO', 'https://github.com/salesforce/BLIP.git')
 
     assets_commit_hash = os.environ.get('ASSETS_COMMIT_HASH', "6f7db241d2f8ba7457bac5ca9753331f0c266917")
-    stable_diffusion_commit_hash = os.environ.get('STABLE_DIFFUSION_COMMIT_HASH', "cf1d67a6fd5ea1aa600c4df58e5b47da45f6bdbf")
+    stable_diffusion_commit_hash = os.environ.get('STABLE_DIFFUSION_COMMIT_HASH', "74e1d8b803845864636cbdd3d4e438e4c316f933")
     stable_diffusion_xl_commit_hash = os.environ.get('STABLE_DIFFUSION_XL_COMMIT_HASH', "45c443b316737a4ab6e40413d7794a7f5657c19f")
     k_diffusion_commit_hash = os.environ.get('K_DIFFUSION_COMMIT_HASH', "ab527a9a6d347f364e3d185ba6d714e22d80cb3c")
     blip_commit_hash = os.environ.get('BLIP_COMMIT_HASH', "48211a1594f1321b00f14c9f7a5b4813144b2fb9")
 
     try:
-        # the existence of this file is a signal to webui.sh/bat that webui needs to be restarted when it stops execution
         os.remove(os.path.join(script_path, "tmp", "restart"))
         os.environ.setdefault('SD_WEBUI_RESTARTING', '1')
     except OSError:
@@ -368,6 +363,13 @@ def prepare_environment():
     print(f"Python {sys.version}")
     print(f"Version: {tag}")
     print(f"Commit hash: {commit}")
+
+    # Additional setup for environment and requirements
+    # Implement any further updates here
+
+	
+	
+	
 
     if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
@@ -437,8 +439,7 @@ def prepare_environment():
         print("Exiting because of --exit argument")
         exit(0)
 
-	
-	
+
 def configure_for_tests():
     if "--api" not in sys.argv:
         sys.argv.append("--api")
