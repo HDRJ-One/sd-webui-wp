@@ -157,31 +157,30 @@ def run_extensions_installers(settings_file):
     for dirname_extension in list_extensions(settings_file):
         run_extension_installer(os.path.join(dir_extensions, dirname_extension))
 
-# Set the default requirements file URL
-default_requirements_url = "https://raw.githubusercontent.com/HDRJ-One/sd-webui-hd/main/requirements_versions.txt"
 
 
 
-def download_requirements_file(url):
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raises an HTTPError for bad responses (4xx and 5xx)
-        with open("requirements_versions.txt", "wb") as file:
-            file.write(response.content)
-        print("Requirements file downloaded successfully.")
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Failed to download requirements file: {e}")
 
-# Download the requirements file from the URL
-download_requirements_file(requirements_file_url)
 		
 		
+def download_file(url, local_filename):
+    response = requests.get(url)
+    response.raise_for_status()
+    with open(local_filename, "wb") as file:
+        file.write(response.content)
+
 def prepare_environment():
     torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113")
-	#requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
+    
     # Fetch the requirements file URL from the environment or use the default URL
-	requirements_file = os.environ.get('REQS_FILE', default_requirements_url)
-	commandline_args = os.environ.get('COMMANDLINE_ARGS', "")
+    requirements_file = os.environ.get('REQS_FILE', "https://raw.githubusercontent.com/HDRJ-One/sd-webui-hd/main/requirements_versions.txt")
+    
+    # If requirements_file is a URL, download it
+    if requirements_file.startswith('http'):
+        download_file(requirements_file, "requirements_versions.txt")
+        requirements_file = "requirements_versions.txt"  # Now pointing to the local file
+
+    commandline_args = os.environ.get('COMMANDLINE_ARGS', "")
 
     gfpgan_package = os.environ.get('GFPGAN_PACKAGE', "git+https://github.com/TencentARC/GFPGAN.git@8d2447a2d918f8eba5a4a01463fd48e45126a379")
     clip_package = os.environ.get('CLIP_PACKAGE', "git+https://github.com/openai/CLIP.git@d50d76daa670286dd6cacf3bcd80b5e4823fc8e1")
