@@ -332,3 +332,40 @@ def prepare_environment():
 
     # Perform version check
     version_check(commit_hash())
+
+	
+	
+def configure_for_tests():
+    if "--api" not in sys.argv:
+        sys.argv.append("--api")
+    if "--ckpt" not in sys.argv:
+        sys.argv.append("--ckpt")
+        sys.argv.append(os.path.join(script_path, "test/test_files/empty.pt"))
+    if "--skip-torch-cuda-test" not in sys.argv:
+        sys.argv.append("--skip-torch-cuda-test")
+    if "--disable-nan-check" not in sys.argv:
+        sys.argv.append("--disable-nan-check")
+
+    os.environ['COMMANDLINE_ARGS'] = ""
+
+
+def start():
+    print(f"Launching {'API server' if '--nowebui' in sys.argv else 'Web UI'} with arguments: {shlex.join(sys.argv[1:])}")
+    import webui
+    if '--nowebui' in sys.argv:
+        webui.api_only()
+    else:
+        webui.webui()
+
+
+def dump_sysinfo():
+    from modules import sysinfo
+    import datetime
+
+    text = sysinfo.get()
+    filename = f"sysinfo-{datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M')}.json"
+
+    with open(filename, "w", encoding="utf8") as file:
+        file.write(text)
+
+    return filename
