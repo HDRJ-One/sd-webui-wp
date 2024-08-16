@@ -28,7 +28,6 @@ default_command_live = (os.environ.get('WEBUI_LAUNCH_LIVE_OUTPUT') == "1")
 
 os.environ.setdefault('GRADIO_ANALYTICS_ENABLED', 'False')
 
-
 def check_python_version():
     is_windows = platform.system() == "Windows"
     major = sys.version_info.major
@@ -219,34 +218,28 @@ def version_check(commit):
         print("version check failed", e)
 
 
-def run_extension_installer(extension_dir):
-    path_installer = os.path.join(extension_dir, "install_dependencies.py")
-    if not os.path.exists(path_installer):
-        print(f"No 'install_dependencies.py' found in '{extension_dir}'")
-        return
+def prepare_environment():
+    """Prepare the environment for launching the web UI."""
 
-    spec = importlib.util.spec_from_file_location("install_dependencies", path_installer)
-    install_dependencies = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(install_dependencies)
-    install_dependencies.install()
+    check_python_version()
+    startup_timer.start()
 
+    # Check if essential Python packages are installed
+    missing_packages = []
+    for package in ['requests', 'torch']:
+        if not is_installed(package):
+            missing_packages.append(package)
 
-def list_extensions(settings_file):
-    settings = {}
+    if missing_packages:
+        print(f"Missing packages: {', '.join(missing_packages)}")
+        print("Installing missing packages...")
+        run_pip(f"install {' '.join(missing_packages)}", desc='Missing Python packages')
 
-    try:
-        with open(settings_file, "r", encoding="utf8") as file:
-            settings = json.load(file)
-    except FileNotFoundError:
-        pass
-    except Exception:
-        errors.report(f'\nCould not load settings\nThe config file "{settings_file}" is likely corrupted\nIt has been moved to the "tmp/config.json"\nReverting config to default\n\n''', exc_info=True)
-        os.replace(settings_file, os.path.join(script_path, "tmp", "config.json"))
+    # Perform Git operations
+    repo_url = 'https://github.com/AUTOMATIC1111/stable-diffusion-webui.git'
+    repo_dir_path = repo_dir('stable-diffusion-webui')
+    git_clone(repo_url, repo_dir_path, 'stable-diffusion-webui', commithash=commit_hash())
+    git_pull_recursive(repo_dir_path)
 
-    disabled_extensions = set(settings.get('disabled_extensions', []))
-    disable_all_extensions = settings.get('disable_all_extensions', 'none')
-
-    if disable_all_extensions != 'none' or args.disable_extra_extensions or args.disable_all_extensions or not os.path.isdir(extensions_dir):
-        return []
-
-    return [x for x in os.listdir(extensions_dir) if x not in disabled_extensions]
+    # Perform version check
+    version_check(commit_hash())
