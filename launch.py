@@ -7,6 +7,7 @@ import shlex
 import platform
 import argparse
 import json
+import requests
 
 dir_repos = "repositories"
 dir_extensions = "extensions"
@@ -157,9 +158,21 @@ def run_extensions_installers(settings_file):
         run_extension_installer(os.path.join(dir_extensions, dirname_extension))
 
 
+
+
+
+		
+		
+def download_file(url, local_filename):
+    response = requests.get(url)
+    response.raise_for_status()
+    with open(local_filename, "wb") as file:
+        file.write(response.content)
+
 def prepare_environment():
     torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113")
-    requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
+    requirements_file = os.environ.get('REQS_FILE', "https://raw.githubusercontent.com/HDRJ-One/sd-webui-hd/main/requirements_versions.txt")
+
     commandline_args = os.environ.get('COMMANDLINE_ARGS', "")
 
     gfpgan_package = os.environ.get('GFPGAN_PACKAGE', "git+https://github.com/TencentARC/GFPGAN.git@8d2447a2d918f8eba5a4a01463fd48e45126a379")
@@ -202,6 +215,10 @@ def prepare_environment():
     print(f"Python {sys.version}")
     print(f"Commit hash: {commit}")
     
+    # Install requests if not installed
+    if not is_installed("requests"):
+        run_pip("install requests", "requests")
+
     if not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch")
 
@@ -257,6 +274,7 @@ def prepare_environment():
     if run_tests:
         exitcode = tests(test_dir)
         exit(exitcode)
+
 
 
 def tests(test_dir):
