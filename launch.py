@@ -240,7 +240,7 @@ def prepare_environment():
     git_clone(codeformer_repo, repo_dir('CodeFormer'), "CodeFormer", codeformer_commit_hash)
     git_clone(blip_repo, repo_dir('BLIP'), "BLIP", blip_commit_hash)
 
-	print("Current working directory:", os.getcwd())
+    print("Current working directory:", os.getcwd())
 	
     if not is_installed("lpips"):
         run_pip(f"install -r {os.path.join(repo_dir('CodeFormer'), 'requirements.txt')}", "requirements for CodeFormer")
