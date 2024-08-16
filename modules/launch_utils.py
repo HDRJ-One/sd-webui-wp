@@ -8,7 +8,6 @@ import importlib.util
 import importlib.metadata
 import platform
 import json
-import shlex
 from functools import lru_cache
 
 from modules import cmd_args, errors
@@ -229,9 +228,10 @@ def run_extension_installer(extension_dir):
     spec = importlib.util.spec_from_file_location("install_dependencies", path_installer)
     install_dependencies = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(install_dependencies)
-    install_dependencies.install_dependencies()
-	
-	ef list_extensions(settings_file):
+    install_dependencies.install()
+
+
+def list_extensions(settings_file):
     settings = {}
 
     try:
@@ -250,37 +250,3 @@ def run_extension_installer(extension_dir):
         return []
 
     return [x for x in os.listdir(extensions_dir) if x not in disabled_extensions]
-
-
-def run_extensions_installers(settings_file):
-    if not os.path.isdir(extensions_dir):
-        return
-
-    with startup_timer.subcategory("run extensions installers"):
-        for dirname_extension in list_extensions(settings_file):
-            logging.debug(f"Installing {dirname_extension}")
-
-            path = os.path.join(extensions_dir, dirname_extension)
-
-            if os.path.isdir(path):
-                run_extension_installer(path)
-                startup_timer.record(dirname_extension)
-
-
-re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
-
-
-def main():
-    try:
-        if args.skip_version_check:
-            print("Skipping version check.")
-        else:
-            version_check(commit_hash())
-            return 0
-    except Exception as e:
-        logging.error("An error occurred during version check", exc_info=e)
-        return 1
-
-
-if __name__ == "__main__":
-    main()
