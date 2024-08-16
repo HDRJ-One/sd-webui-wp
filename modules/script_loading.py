@@ -1,27 +1,25 @@
 import os
-import importlib.util
-
-from modules import errors
-
-
-loaded_scripts = {}
+import sys
+import traceback
+from types import ModuleType
 
 
 def load_module(path):
-    module_spec = importlib.util.spec_from_file_location(os.path.basename(path), path)
-    module = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(module)
+    with open(path, "r", encoding="utf8") as file:
+        text = file.read()
 
-    loaded_scripts[path] = module
+    compiled = compile(text, path, 'exec')
+    module = ModuleType(os.path.basename(path))
+    exec(compiled, module.__dict__)
+
     return module
 
 
-def preload_extensions(extensions_dir, parser, extension_list=None):
+def preload_extensions(extensions_dir, parser):
     if not os.path.isdir(extensions_dir):
         return
 
-    extensions = extension_list if extension_list is not None else os.listdir(extensions_dir)
-    for dirname in sorted(extensions):
+    for dirname in sorted(os.listdir(extensions_dir)):
         preload_script = os.path.join(extensions_dir, dirname, "preload.py")
         if not os.path.isfile(preload_script):
             continue
@@ -32,4 +30,5 @@ def preload_extensions(extensions_dir, parser, extension_list=None):
                 module.preload(parser)
 
         except Exception:
-            errors.report(f"Error running preload() for {preload_script}", exc_info=True)
+            print(f"Error running preload() for {preload_script}", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
