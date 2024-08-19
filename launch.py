@@ -8,8 +8,8 @@ import platform
 import argparse
 import json
 
-dir_repos = "repositories"
-dir_extensions = "extensions"
+dir_repos = "stable-diffusion-webui/repositories"
+dir_extensions = "stable-diffusion-webui/extensions"
 python = sys.executable
 git = os.environ.get('GIT', "git")
 index_url = os.environ.get('INDEX_URL', "")
@@ -159,7 +159,6 @@ def run_extensions_installers(settings_file):
 
 def prepare_environment():
     torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113")
-    #requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
     requirements_file = '/content/stable-diffusion-webui/requirements_versions.txt'
     commandline_args = os.environ.get('COMMANDLINE_ARGS', "")
 
@@ -233,47 +232,41 @@ def prepare_environment():
     if not is_installed("pyngrok") and ngrok:
         run_pip("install pyngrok", "ngrok")
 
-    os.makedirs(dir_repos, exist_ok=True)
+    # Update to create repositories inside stable-diffusion-webui
+    os.makedirs("stable-diffusion-webui/repositories", exist_ok=True)
     print("Current working directory:", os.getcwd())
-    # List contents of the current directory
     print("Contents of current directory:", os.listdir('/content'))
-    # Change the working directory
-    new_directory = 'content/stable-diffusion-webui'
-    os.chdir(new_directory)
+    os.chdir('stable-diffusion-webui')
 
-    git_clone(stable_diffusion_repo, repo_dir('stable-diffusion-stability-ai'), "Stable Diffusion", stable_diffusion_commit_hash)
-    run_pip(f"install -e {repo_dir('stable-diffusion-stability-ai')}", "stable-diffusion-stability-ai")
-    git_clone(taming_transformers_repo, repo_dir('taming-transformers'), "Taming Transformers", taming_transformers_commit_hash)
-    run_pip(f"install -e {repo_dir('taming-transformers')}", "taming-transformers")
-    git_clone(k_diffusion_repo, repo_dir('k-diffusion'), "K-diffusion", k_diffusion_commit_hash)
-    run_pip(f"install -e {repo_dir('k-diffusion')}", "k-diffusion")
-    git_clone(codeformer_repo, repo_dir('CodeFormer'), "CodeFormer", codeformer_commit_hash)
-    #run_pip(f"install -e {repo_dir('CodeFormer/basicsr')}", "basicsr")
-    git_clone(blip_repo, repo_dir('BLIP'), "BLIP", blip_commit_hash)
-    #run_pip(f"install -e {repo_dir('BLIP')}", "BLIP")
+    git_clone(stable_diffusion_repo, os.path.join(dir_repos, 'stable-diffusion-stability-ai'), "Stable Diffusion", stable_diffusion_commit_hash)
+    run_pip(f"install -e {os.path.join(dir_repos, 'stable-diffusion-stability-ai')}", "stable-diffusion-stability-ai")
+    git_clone(taming_transformers_repo, os.path.join(dir_repos, 'taming-transformers'), "Taming Transformers", taming_transformers_commit_hash)
+    run_pip(f"install -e {os.path.join(dir_repos, 'taming-transformers')}", "taming-transformers")
+    git_clone(k_diffusion_repo, os.path.join(dir_repos, 'k-diffusion'), "K-diffusion", k_diffusion_commit_hash)
+    run_pip(f"install -e {os.path.join(dir_repos, 'k-diffusion')}", "k-diffusion")
+    git_clone(codeformer_repo, os.path.join(dir_repos, 'CodeFormer'), "CodeFormer", codeformer_commit_hash)
+    git_clone(blip_repo, os.path.join(dir_repos, 'BLIP'), "BLIP", blip_commit_hash)
 
     print("Current working directory:", os.getcwd())
-	
+
     if not is_installed("lpips"):
-        codeformer_requirements_path = os.path.join(repo_dir('CodeFormer'), 'requirements.txt')
+        codeformer_requirements_path = os.path.join(os.path.join(dir_repos, 'CodeFormer'), 'requirements.txt')
         print(f"Installing requirements for CodeFormer from {codeformer_requirements_path}")
-        run_pip(f"install -r {os.path.join(repo_dir('CodeFormer'), 'requirements.txt')}", "requirements for CodeFormer")
+        run_pip(f"install -r {codeformer_requirements_path}", "requirements for CodeFormer")
 
     print(f"Installing requirements for Web UI from {requirements_file}")
-    run_pip(f"install -r {requirements_file}", "requirements for Web UI")
+    run_pip(f"install -r {requirements_file}", "requirements.txt")
 
-    run_extensions_installers(settings_file=args.ui_settings_file)
+    if not run_tests:
+        print("Skipping tests")
+    elif not is_installed("pytest"):
+        print("Pytest not installed")
+    else:
+        print(f"Running tests from {test_dir}")
+        run(f"pytest {test_dir}")
 
-    if update_check:
-        version_check(commit)
-    
-    if "--exit" in sys.argv:
-        print("Exiting because of --exit argument")
-        exit(0)
+    print("Completed preparation")
 
-    if run_tests:
-        exitcode = tests(test_dir)
-        exit(exitcode)
 
 
 def tests(test_dir):
