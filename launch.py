@@ -235,7 +235,8 @@ def prepare_environment():
 
     os.makedirs(dir_repos, exist_ok=True)
     print("Current working directory:", os.getcwd())
-
+    # List contents of the current directory
+    print("Contents of current directory:", os.listdir('/content'))
     # Change the working directory
     new_directory = 'content/stable-diffusion-webui'
     os.chdir(new_directory)
