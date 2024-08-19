@@ -8,6 +8,10 @@ import platform
 import argparse
 import json
 
+from modules import launch_utils
+
+args = launch_utils.args
+
 dir_repos = "stable-diffusion-webui/repositories"
 dir_extensions = "stable-diffusion-webui/extensions"
 python = sys.executable
