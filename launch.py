@@ -204,7 +204,8 @@ def prepare_environment():
     
     if not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch")
-        pip install git+https://github.com/xinntao/BasicSR.git
+        # Install BasicSR using subprocess
+        subprocess.run(['pip', 'install', 'git+https://github.com/xinntao/BasicSR.git'], check=True)
 
     if not skip_torch_cuda_test:
         run_python("import torch; assert torch.cuda.is_available(), 'Torch is not able to use GPU; add --skip-torch-cuda-test to COMMANDLINE_ARGS variable to disable this check'")
