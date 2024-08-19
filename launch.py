@@ -163,7 +163,7 @@ def run_extensions_installers(settings_file):
 
 def prepare_environment():
     torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==2.1.2 torchvision==0.16.2 --extra-index-url https://download.pytorch.org/whl/cu117")
-    requirements_file = '/content/stable-diffusion-webui/requirements_versions.txt'
+    requirements_file = '/home/user/app/stable-diffusion-webui/requirements_versions.txt'
     commandline_args = os.environ.get('COMMANDLINE_ARGS', "--precision full --no-half --use-cpu all --skip-torch-cuda-test")
 
     gfpgan_package = os.environ.get('GFPGAN_PACKAGE', "git+https://github.com/TencentARC/GFPGAN.git@8d2447a2d918f8eba5a4a01463fd48e45126a379")
@@ -208,8 +208,6 @@ def prepare_environment():
     
     if not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch")
-        # Install BasicSR using subprocess
-        subprocess.run(['pip', 'install', 'git+https://github.com/xinntao/BasicSR.git'], check=True)
 
     if not skip_torch_cuda_test:
         run_python("import torch; assert torch.cuda.is_available(), 'Torch is not able to use GPU; add --skip-torch-cuda-test to COMMANDLINE_ARGS variable to disable this check'")
@@ -238,12 +236,6 @@ def prepare_environment():
     if not is_installed("pyngrok") and ngrok:
         run_pip("install pyngrok", "ngrok")
 
-    # Update to create repositories inside stable-diffusion-webui
-    os.makedirs("stable-diffusion-webui/repositories", exist_ok=True)
-    print("Current working directory:", os.getcwd())
-    print("Contents of current directory:", os.listdir('/content'))
-    os.chdir('stable-diffusion-webui')
-
     git_clone(stable_diffusion_repo, os.path.join(dir_repos, 'stable-diffusion-stability-ai'), "Stable Diffusion", stable_diffusion_commit_hash)
     run_pip(f"install -e {os.path.join(dir_repos, 'stable-diffusion-stability-ai')}", "stable-diffusion-stability-ai")
     git_clone(taming_transformers_repo, os.path.join(dir_repos, 'taming-transformers'), "Taming Transformers", taming_transformers_commit_hash)
@@ -252,8 +244,6 @@ def prepare_environment():
     run_pip(f"install -e {os.path.join(dir_repos, 'k-diffusion')}", "k-diffusion")
     git_clone(codeformer_repo, os.path.join(dir_repos, 'CodeFormer'), "CodeFormer", codeformer_commit_hash)
     git_clone(blip_repo, os.path.join(dir_repos, 'BLIP'), "BLIP", blip_commit_hash)
-
-    print("Current working directory:", os.getcwd())
 
     if not is_installed("lpips"):
         codeformer_requirements_path = os.path.join(os.path.join(dir_repos, 'CodeFormer'), 'requirements.txt')
