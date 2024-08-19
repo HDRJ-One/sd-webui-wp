@@ -27,6 +27,8 @@ safetensors
 scikit-image>=0.19
 tomesd
 torch
+torchvision
+basicsr
 torchdiffeq
 torchsde
 transformers==4.30.2
