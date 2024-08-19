@@ -162,7 +162,7 @@ def run_extensions_installers(settings_file):
 
 
 def prepare_environment():
-    torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==2.1.2 torchvision==0.16.2 --extra-index-url https://download.pytorch.org/whl/cu117")
+    torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --ex --extra-index-url https://download.pytorch.org/whl/cu113")
     requirements_file = '/home/user/app/stable-diffusion-webui/requirements_versions.txt'
     commandline_args = os.environ.get('COMMANDLINE_ARGS', "--precision full --no-half --use-cpu all --skip-torch-cuda-test")
 
