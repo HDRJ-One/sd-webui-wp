@@ -236,6 +236,10 @@ def prepare_environment():
     os.makedirs(dir_repos, exist_ok=True)
     print("Current working directory:", os.getcwd())
 
+    # Change the working directory
+    new_directory = 'content/stable-diffusion-webui'
+    os.chdir(new_directory)
+
     git_clone(stable_diffusion_repo, repo_dir('stable-diffusion-stability-ai'), "Stable Diffusion", stable_diffusion_commit_hash)
     run_pip(f"install -e {repo_dir('stable-diffusion-stability-ai')}", "stable-diffusion-stability-ai")
     git_clone(taming_transformers_repo, repo_dir('taming-transformers'), "Taming Transformers", taming_transformers_commit_hash)
